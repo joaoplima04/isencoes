@@ -2,7 +2,7 @@ from functions import extrair_texto, extrair_imposto_de_renda, extrair_salario_b
 from tqdm import tqdm
 import pandas as pd
 
-dados = pd.read_excel("C:\\Users\\João Lucas\\Downloads\\Teste programa Uni (Parte) 1.xlsx")
+dados = pd.read_excel("C:\\Users\\João Lucas\\Downloads\\Teste programa Uni (Parte) 2.xlsx")
 
 total_linhas = len(dados)
 

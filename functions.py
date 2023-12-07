@@ -71,16 +71,16 @@ def rotula_contracheque(text):
         return "Declaração"
     elif "extrato financeiro de estágio" in text:
         return "Contracheque"
-    elif "nota fiscal" in text or "extrato" in text or "comprovante de cadastro" in text or "informações cadastrais da familia" in text or "nubank" in text:
+    elif any(keyword in text for keyword in ["nota fiscal", "extrato", "comprovante de cadastro", "informações cadastrais da familia", "nubank"]):
         return "Inválido"
-    elif "proventos" in text or "folha mensal" in text or "vencimentos" in text or "salário" in text or "descontos" in text or "líquido" in text or "bolsa auxilio":
+    elif any(keyword in text for keyword in ["proventos", "folha mensal", "vencimentos", "salário", "descontos", "líquido", "bolsa auxilio"]):
         return "Contracheque"
     elif "carteira de trabalho" in text:
         return "Carteira de Trabalho"
     elif "imposto sobre a renda" in text:
         return "Imposto de Renda"
     else:
-        return "Não é possível analizar este arquivo"
+        return "Não é possível analisar este arquivo"
 
 
 def rotula_imposto_de_renda(text):
