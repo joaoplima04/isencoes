@@ -2,7 +2,7 @@ from functions import extrair_texto, extrair_imposto_de_renda, extrair_salario_b
 from tqdm import tqdm
 import pandas as pd
 
-dados = pd.read_excel("C:\\Users\\João Lucas\\Downloads\\Teste programa Uni (Parte) 2.xlsx")
+dados = pd.read_excel("C:\\Users\\João Lucas\\Downloads\\Teste Uni (Parte 2).xlsx")
 
 total_linhas = len(dados)
 
@@ -45,7 +45,7 @@ for indice, linha in tqdm(dados.iterrows(), total=dados.shape[0]):
             print(f"Não foi possível analizar o contracheque pelo seguinte erro: {erro}")
         if rotula_imposto_de_renda(texto_ipr) == "Inválido":
             decisao_ipr = "alínea \"c\";"
-        if rotula_imposto_de_renda(texto_ipr) != "Contracheque" and rotula_imposto_de_renda(texto_ipr) != "Inválido":
+        if rotula_imposto_de_renda(texto_ipr) != "Imposto de Renda" and rotula_imposto_de_renda(texto_ipr) != "Inválido":
             decisao_ipr = ""
         if rotula_imposto_de_renda(texto_ipr) == "Imposto de Renda":
             imposto_de_renda = extrair_imposto_de_renda(texto_ipr)
