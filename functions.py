@@ -84,9 +84,9 @@ def rotula_contracheque(text):
 
 
 def rotula_imposto_de_renda(text):
-    if "edital complementar" in text:
+    if "edital complementar" in text or "edital de abertura" in text or "conselho federal" in text:
         return "Declaração"
-    elif "nota fiscal" in text or "imposto sobre a renda retido na fonte" in text or "não consta entrega de declaração para este ano" in text:
+    elif "nota fiscal" in text or "imposto sobre a renda retido na fonte" in text or "não consta entrega de declaração para este ano" in text or "o número do recibo de sua declaração apresentada" in text or "comprovante de situação cadastral no cpf" in text:
         return "Inválido"
     elif "imposto sobre a renda" in text:
         if "exercício 2023" not in text:
@@ -139,35 +139,19 @@ def julga_salario_bruto(salario, texto):
 
 
 def extrair_imposto_de_renda(texto):
-    # Encontrar todas as ocorrências de números no texto
-    numeros = re.findall(r'\d+\.\d+\,\d+', texto)
+    # Procurar a frase específica e extrair o valor associado
+    match = re.search(r'recebidos de pessoa jurídica pelo titular[\s\S]*?(\d+\.\d+,\d+)', texto, re.IGNORECASE)
+
     imposto_de_renda = 0
+    if match:
+        # Extrair o valor da primeira captura
+        valor_encontrado = match.group(1)
 
-    if numeros:
-        # Remover pontos, substituir vírgulas por pontos e converter para floats
-        numeros_floats = [float(num.replace('.', '').replace(',', '.')) for num in numeros]
+        # Remover pontos, substituir vírgulas por pontos e converter para float
+        valor_float = float(valor_encontrado.replace('.', '').replace(',', '.'))
 
-        # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
-        if numeros_floats:
-            imposto_de_renda = max(numeros_floats)
-    else:
-        numeros_2 = re.findall(r'\d+\,\d+\.\d+', texto)
-        if numeros_2:
-            # Remover pontos, substituir vírgulas por pontos e converter para floats
-            numeros_floats = [float(num.replace(',', '')) for num in numeros_2]
+        imposto_de_renda = valor_float
 
-            # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
-            if numeros_floats:
-                imposto_de_renda = max(numeros_floats)
-        else:
-            numeros_3 = re.findall(r'\d+\,\d+', texto)
-            if numeros_3:
-                # Remover pontos, substituir vírgulas por pontos e converter para floats
-                numeros_floats = [float(num.replace(',', '.')) for num in numeros_3]
-
-                # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
-                if numeros_floats:
-                    imposto_de_renda = max(numeros_floats)
     return imposto_de_renda
 
 
