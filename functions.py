@@ -64,16 +64,42 @@ def extrair_texto(url):
     return text.lower()
 
 
-def rotula_contracheque(text):
-    if "instituto nacional do seguro social" in text:
+def extrai_numero_de_paginas(url):
+    if url.endswith(".pdf"):
+        # Baixar o conteúdo do PDF
+        response = requests.get(url)
+        pdf_content = BytesIO(response.content)
+        # Salvar o conteúdo do PDF em um arquivo temporário
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(pdf_content.getvalue())
+            temp_filename = temp_file.name
+        # Criar um objeto de documento PDF
+        try:
+            doc = fitz.open(temp_filename)
+        except TypeError as e:
+            print(f"Erro ao processar a imagem: {e}")
+        return doc.page_count
+
+
+def rotula_contracheque(text, numero_paginas):
+    if "instituto nacional do seguro social" in text or "cadastro nacional de informações sociais":
         return "Contracheque"
     elif "anexo" in text or "declaração" in text:
         return "Declaração"
-    elif "extrato financeiro de estágio" in text:
+    elif "extrato financeiro de estágio" in text or "proventos" or "descontos":
         return "Contracheque"
-    elif any(keyword in text for keyword in ["nota fiscal", "extrato", "comprovante de cadastro", "informações cadastrais da familia", "comprovante de situação cadastral no cpf"]):
+    elif any(keyword in text for keyword in ["carteira de trabalho digital", "nota fiscal",
+                                             "informações cadastrais da familia",
+                                             "comprovante de situação cadastral no cpf", "carteira de trabalho digital",
+                                             "comprovante de trasferência", "tipo de admissão",
+                                             "termo de recisão de contrato de trabalho", "entrada conta corrente",
+                                             "imposto de renda", "mobile banking"]):
         return "Inválido"
-    elif any(keyword in text for keyword in ["proventos", "folha mensal", "vencimentos", "salário", "descontos", "líquido", "bolsa auxilio"]):
+    elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf" or "extrato" in text)\
+            and numero_paginas == 1:
+        return "Inválido"
+    elif any(keyword in text for keyword in ["proventos", "folha mensal", "vencimentos", "salário", "descontos",
+                                             "líquido", "bolsa auxilio"]):
         return "Contracheque"
     elif "carteira de trabalho" in text:
         return "Carteira de Trabalho"
@@ -83,10 +109,18 @@ def rotula_contracheque(text):
         return "Não é possível analisar este arquivo"
 
 
-def rotula_imposto_de_renda(text):
+def rotula_imposto_de_renda(text, numero_paginas):
     if "edital complementar" in text or "edital de abertura" in text or "conselho federal" in text:
         return "Declaração"
-    elif "nota fiscal" in text or "imposto sobre a renda retido na fonte" in text or "não consta entrega de declaração para este ano" in text or "o número do recibo de sua declaração apresentada" in text or "comprovante de situação cadastral no cpf" in text:
+    elif "nota fiscal" in text or "imposto sobre a renda retido na fonte" in text or\
+            "não consta entrega de declaração para este ano" in text or "vencimentos" in text or\
+            "o número do recibo de sua declaração apresentada" in text or\
+             "cadastro único" in text or\
+            "certidão negativa de débitos" in text or "cópia para simples conferência" in text or\
+            "declaração anual do simei" in text or "situação da declaração" in text or\
+            "não consta entrega de declarações" in text or "não consta entrega de declaração este ano":
+        return "Inválido"
+    elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf") and numero_paginas == 1:
         return "Inválido"
     elif "imposto sobre a renda" in text:
         if "exercício 2023" not in text:
@@ -133,14 +167,15 @@ def julga_salario_bruto(salario, texto):
     passou = False
     if salario != 0 and salario > 3960:
         passou = True
-    if "férias" in texto or "recesso" in texto or "ferias" in texto or "repouso" in texto:
+    if "férias" in texto or "recesso" in texto or "ferias" in texto or "repouso" in texto\
+            or "adiantamento 13salario" in texto:
         passou = False
     return passou
 
 
 def extrair_imposto_de_renda(texto):
     # Procurar a frase específica e extrair o valor associado
-    match = re.search(r'recebidos de pessoa jurídica pelo titular[\s\S]*?(\d+\.\d+,\d+)', texto, re.IGNORECASE)
+    match = re.search(r'rendimentos tributáveis e desconto simplificado[\s\S]*?(\d{1,3}(?:\.\d{3})*,\d+\b)', texto, re.IGNORECASE)
 
     imposto_de_renda = 0
     if match:
@@ -161,7 +196,7 @@ def julga_imposto_de_renda(imposto_de_renda):
         passou = True
     return passou
 
-'''
+
 def obter_numero_mes(mes):
     meses = {
         'Janeiro': 1,
@@ -178,8 +213,8 @@ def obter_numero_mes(mes):
         'Dezembro': 12
     }
     return meses.get(mes, 0)
-'''
-'''
+
+
 def extrair_mes_ano(texto):
     padroes_data = [
         r'(?<![\d/])\b(0?[1-9]|1[0-2])/(20\d{2})\b',  # Padrão MM/AAAA
@@ -209,19 +244,19 @@ def extrair_mes_ano(texto):
                     return datetime.strptime(f"{mes_transformado}/{ano}", "%m/%Y")
 
     return 0
-'''
-'''
-def verifica_meses_consecutivos(datas):
+
+
+def verifica_meses_iguais(datas):
     # Ordenar as datas por ordem crescente
     for data in datas:
         if data != 0:
             datas_ordenadas = sorted(datas)
         # Verificar se as datas são consecutivas
             for i in range(len(datas_ordenadas) - 1):
-                if (datas_ordenadas[i].month != 12 and datas_ordenadas[i].month + 1 != datas_ordenadas[i + 1].month) or (datas_ordenadas[i].month == 12 and datas_ordenadas[i + 1] != 1):
-                    return False
-        return True
-'''
+                if datas_ordenadas[i].month == datas_ordenadas[i + 1].month:
+                    return True
+        return False
+
 
 
 
