@@ -90,10 +90,12 @@ def rotula_contracheque(text, numero_paginas):
         return "Contracheque"
     elif any(keyword in text for keyword in ["carteira de trabalho digital", "nota fiscal",
                                              "informações cadastrais da familia",
-                                             "comprovante de situação cadastral no cpf", "carteira de trabalho digital",
+                                             "carteira de trabalho digital",
                                              "comprovante de trasferência", "tipo de admissão",
                                              "termo de recisão de contrato de trabalho", "entrada conta corrente",
-                                             "imposto de renda", "mobile banking"]):
+                                             "imposto de renda", "mobile banking", "meu nis",
+                                             "termo de recisão do contrato de trabalho",
+                                             "termo de homologação de recisão de contato de trabalho"]):
         return "Inválido"
     elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf" or "extrato" in text)\
             and numero_paginas == 1:
@@ -112,15 +114,19 @@ def rotula_contracheque(text, numero_paginas):
 def rotula_imposto_de_renda(text, numero_paginas):
     if "edital complementar" in text or "edital de abertura" in text or "conselho federal" in text:
         return "Declaração"
-    elif "nota fiscal" in text or "imposto sobre a renda retido na fonte" in text or\
+    elif "imposto sobre a renda retido na fonte" in text or\
             "não consta entrega de declaração para este ano" in text or "vencimentos" in text or\
-            "o número do recibo de sua declaração apresentada" in text or\
-             "cadastro único" in text or\
-            "certidão negativa de débitos" in text or "cópia para simples conferência" in text or\
+            "certidão negativa de débitos" in text or\
+            "cópia para simples conferência" in text or\
             "declaração anual do simei" in text or "situação da declaração" in text or\
-            "não consta entrega de declarações" in text or "não consta entrega de declaração este ano":
+            "não consta entrega de declarações" in text or "não consta entrega de declaração este ano" in text or\
+            "não há informação para o exercício informado" in text or\
+            "não há informe de rendimentos de benefícios" in text or\
+            "sua declaração não consta na base de dados da receita federal" in text or\
+            "termo de recisão do contrato de trabalho" in text:
         return "Inválido"
-    elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf") and numero_paginas == 1:
+    elif numero_paginas == 1 and ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf" in text or
+                                  "cadastro único" in text or "o número do recibo de sua declaração apresentada" in text):
         return "Inválido"
     elif "imposto sobre a renda" in text:
         if "exercício 2023" not in text:
@@ -231,16 +237,13 @@ def extrair_mes_ano(texto):
         if resultado:
             if padrao_data == r'01/(0?[1-9]|10|11|12)/(20\d{2}) (a|à) (28|30|31)/(0?[1-9]|10|11|12)/(20\d{2})':
                 _, _, _, _, mes, ano = resultado.groups()
-                print(f"Data: {mes}/{ano}")
                 return datetime.strptime(f"{mes}/{ano}", "%m/%Y")
             else:
                 mes, ano = resultado.groups()
                 mes_transformado = obter_numero_mes(mes.capitalize())
                 if mes_transformado == 0:
-                    print(f"Data: {mes}/{ano}")
                     return datetime.strptime(f"{mes}/{ano}", "%m/%Y")
                 else:
-                    print(f"Data: {mes_transformado}/{ano}")
                     return datetime.strptime(f"{mes_transformado}/{ano}", "%m/%Y")
 
     return 0
