@@ -253,11 +253,14 @@ def verifica_meses_iguais(datas):
     # Ordenar as datas por ordem crescente
     for data in datas:
         if data != 0:
-            datas_ordenadas = sorted(datas)
+            try:
+                datas_ordenadas = sorted(datas)
+                for i in range(len(datas_ordenadas) - 1):
+                    if datas_ordenadas[i].month == datas_ordenadas[i + 1].month:
+                        return True
+            except Exception as e:
+                print(f"Não foi possível ordenar as datas pelo seguinte erro: {e}")
         # Verificar se as datas são consecutivas
-            for i in range(len(datas_ordenadas) - 1):
-                if datas_ordenadas[i].month == datas_ordenadas[i + 1].month:
-                    return True
         return False
 
 
