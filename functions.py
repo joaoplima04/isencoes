@@ -82,37 +82,39 @@ def extrai_numero_de_paginas(url):
 
 
 def rotula_contracheque(text, numero_paginas):
-    if "instituto nacional do seguro social" in text or "cadastro nacional de informações sociais":
+    if "instituto nacional do seguro social" in text or "cadastro nacional de informações sociais" in text:
         return "Contracheque"
+    elif "imposto sobre a renda" in text or "imposto de renda" in text:
+        return "Inválido"
     elif "anexo" in text or "declaração" in text:
         return "Declaração"
-    elif "extrato financeiro de estágio" in text or "proventos" or "descontos":
+    elif "extrato financeiro de estágio" in text or "proventos" in text or "descontos" in text:
         return "Contracheque"
     elif any(keyword in text for keyword in ["carteira de trabalho digital", "nota fiscal",
                                              "informações cadastrais da familia",
                                              "carteira de trabalho digital",
-                                             "comprovante de trasferência", "tipo de admissão",
+                                             "comprovante de transferência", "tipo de admissão",
                                              "termo de recisão de contrato de trabalho", "entrada conta corrente",
                                              "imposto de renda", "mobile banking", "meu nis",
                                              "termo de recisão do contrato de trabalho",
                                              "termo de homologação de recisão de contato de trabalho"]):
         return "Inválido"
-    elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf" or "extrato" in text)\
+    elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf" in text or "extrato" in text
+          or "cadastro único" in text or "cadastro unico" in text)\
             and numero_paginas == 1:
         return "Inválido"
-    elif any(keyword in text for keyword in ["proventos", "folha mensal", "vencimentos", "salário", "descontos",
-                                             "líquido", "bolsa auxilio"]):
+    elif any(keyword in text for keyword in ["proventos", "folha mensal", "vencimentos", "descontos",
+                                             "líquido", "bolsa auxilio", "recibo de pagamento de salário"]):
         return "Contracheque"
     elif "carteira de trabalho" in text:
         return "Carteira de Trabalho"
-    elif "imposto sobre a renda" in text:
-        return "Imposto de Renda"
     else:
         return "Não é possível analisar este arquivo"
 
 
 def rotula_imposto_de_renda(text, numero_paginas):
-    if "edital complementar" in text or "edital de abertura" in text or "conselho federal" in text:
+    if "edital complementar" in text or "edital de abertura" in text or "conselho federal" in text or\
+            "declaração de isenção do imposto de renda pessoa física" in text:
         return "Declaração"
     elif "imposto sobre a renda retido na fonte" in text or\
             "não consta entrega de declaração para este ano" in text or "vencimentos" in text or\
@@ -129,8 +131,10 @@ def rotula_imposto_de_renda(text, numero_paginas):
                                   "cadastro único" in text or "o número do recibo de sua declaração apresentada" in text):
         return "Inválido"
     elif "imposto sobre a renda" in text:
-        if "exercício 2023" not in text:
+        if "exercício 2022" in text:
             return "Inválido"
+        elif "exercício 2023" not in text and "exercício 2022" not in text:
+            return "Não é possível analizar este arquivo"
         else:
             return "Imposto de Renda"
     else:
@@ -140,7 +144,7 @@ def rotula_imposto_de_renda(text, numero_paginas):
 def extrair_salario_bruto(texto):
     salario_bruto = 0
     # Encontrar todas as ocorrências de números no texto
-    numeros = re.findall(r'\d+\.\d+\,\d+', texto)
+    numeros = re.findall(r'(?<= )\d+\.\d+\,\d+(?= )', texto)
     if numeros:
         # Remover pontos, substituir vírgulas por pontos e converter para floats
         numeros_floats = [float(num.replace('.', '').replace(',', '.')) for num in numeros]
@@ -148,8 +152,11 @@ def extrair_salario_bruto(texto):
         # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
         if numeros_floats:
             salario_bruto = max(numeros_floats)
+            if salario_bruto > 15000:
+                numeros_floats = sorted(numeros_floats, reverse=True)
+                salario_bruto = numeros_floats[1]
     else:
-        numeros_2 = re.findall(r'\d+\,\d+\.\d+', texto)
+        numeros_2 = re.findall(r'(?<= )\d+\,\d+\.\d+(?= )', texto)
         if numeros_2:
             # Remover pontos, substituir vírgulas por pontos e converter para floats
             numeros_floats = [float(num.replace(',', '')) for num in numeros_2]
@@ -157,8 +164,11 @@ def extrair_salario_bruto(texto):
             # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
             if numeros_floats:
                 salario_bruto = max(numeros_floats)
+                if salario_bruto > 15000:
+                    numeros_floats = sorted(numeros_floats, reverse=True)
+                    salario_bruto = numeros_floats[1]
         else:
-            numeros_3 = re.findall(r'\d+\,\d+', texto)
+            numeros_3 = re.findall(r'(?<= )\d+\,\d+(?= )', texto)
             if numeros_3:
                 # Remover pontos, substituir vírgulas por pontos e converter para floats
                 numeros_floats = [float(num.replace(',', '.')) for num in numeros_3]
@@ -166,6 +176,9 @@ def extrair_salario_bruto(texto):
                 # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
                 if numeros_floats:
                     salario_bruto = max(numeros_floats)
+                    if salario_bruto > 15000:
+                        numeros_floats = sorted(numeros_floats, reverse=True)
+                        salario_bruto = numeros_floats[1]
     return salario_bruto
 
 
@@ -174,7 +187,7 @@ def julga_salario_bruto(salario, texto):
     if salario != 0 and salario > 3960:
         passou = True
     if "férias" in texto or "recesso" in texto or "ferias" in texto or "repouso" in texto\
-            or "adiantamento 13salario" in texto:
+            or "adiantamento 13salario" in texto or "decimo-terceiro salario" in texto:
         passou = False
     return passou
 
@@ -216,7 +229,19 @@ def obter_numero_mes(mes):
         'Setembro': 9,
         'Outubro': 10,
         'Novembro': 11,
-        'Dezembro': 12
+        'Dezembro': 12,
+        'Jan': 1,
+        'Fev': 2,
+        'Marc': 3,
+        'Abr': 4,
+        'Mai': 5,
+        'Jun': 6,
+        'Jul': 7,
+        'Ago': 8,
+        'Set': 9,
+        'Out': 10,
+        'Nov': 11,
+        'Dez': 12
     }
     return meses.get(mes, 0)
 
@@ -227,9 +252,12 @@ def extrair_mes_ano(texto):
         r'\b(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro) / (20\d{2})\b',  # Padrão Mês / AAAA
         r'\b(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/(20\d{2})\b',  # Padrão Mês/AAAA
         r'\b(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro) de (20\d{2})',  # Padrão Mês de AAAA
+        r'\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez) (20\d{2})',  # Padrão Mês AAAA
+        r'\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)/(20\d{2})',  # Padrão Mês AAAA
         r'01/(0?[1-9]|10|11|12)/(20\d{2}) (a|à) (28|30|31)/(0?[1-9]|10|11|12)/(20\d{2})',  # Padrão MM/AAAA a MM/AAAA
         r'(?<![\d/])\b(0?[1-9]|1[0-2]) / (20\d{2})\b',  # Padrão MM / AAAA
-        r'(?<![\d/])\b(0?[1-9]|1[0-2])-(20\d{2})\b'  # Padrão MM-AAAA
+        r'(?<![\d/])\b(0?[1-9]|1[0-2])-(20\d{2})\b',  # Padrão MM-AAAA
+        r'(?<![\d/])\b(0?[1-9]|1[0-2])/ (20\d{2})\b',  # Padrão MM/ AAAA
     ]
 
     for padrao_data in padroes_data:
@@ -264,5 +292,43 @@ def verifica_meses_iguais(datas):
         return False
 
 
+def testa_uni_contracheque(contracheques):
+    decisao_contracheque = ""
+    texto_contracheque = ""
+    datas = []
+    verify = 0
+    for url_contracheque in contracheques:
+        try:
+            texto_contracheque = extrair_texto(url_contracheque)
+            quantidade_pag = extrai_numero_de_paginas(url_contracheque)
+            data = extrair_mes_ano(texto_contracheque)
+            datas.append(data)
+            print(rotula_contracheque(texto_contracheque, quantidade_pag))
+        except Exception as erro:
+            print(f"Não foi possível analizar o contracheque pelo seguinte erro: {erro}")
+        if rotula_contracheque(texto_contracheque, quantidade_pag) != "Contracheque" and rotula_contracheque(
+                texto_contracheque, quantidade_pag) != "Inválido":
+            break
+        salario = extrair_salario_bruto(texto_contracheque)
+        print(salario)
+        if rotula_contracheque(texto_contracheque, quantidade_pag) == "Contracheque" and salario == 0:
+            decisao_contracheque = ""
+            verify += 1
+            break
+        if rotula_contracheque(texto_contracheque, quantidade_pag) == "Inválido":
+            print(rotula_contracheque(texto_contracheque, quantidade_pag), url_contracheque)
+            decisao_contracheque = "alínea \"b\";"
+            break
+        if julga_salario_bruto(salario, texto_contracheque):
+            decisao_contracheque = "2.6.1, alínea \"b\";"
+            break
+    if verifica_meses_iguais(datas):
+        decisao_contracheque = "alínea \"b\";"
+        print("Meses Iguais")
+        print(datas)
+    if rotula_contracheque(texto_contracheque, quantidade_pag) == "Contracheque" and decisao_contracheque == "" and verify == 0:
+        decisao_contracheque = "DEFERIDO"
+
+    return decisao_contracheque
 
 

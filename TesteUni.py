@@ -3,7 +3,7 @@ from functions import extrair_texto, extrai_numero_de_paginas, extrair_imposto_d
 from tqdm import tqdm
 import pandas as pd
 
-dados = pd.read_excel("C:\\Users\\João Lucas\\Downloads\\Teste Uni analizáveis após alterações (entrada).xlsx")
+dados = pd.read_excel("C:\\Users\\João Lucas\\Downloads\\Teste Uni (inteiro) amarelos entrada.xlsx")
 
 total_linhas = len(dados)
 
@@ -14,8 +14,8 @@ for indice, linha in tqdm(dados.iterrows(), total=dados.shape[0]):
     contracheques = [contracheque_1, contracheque_2, contracheque_3]
     decisao_contracheque = ""
     texto_contracheque = ""
-    count = 0
     datas = []
+    verify = 0
     for url_contracheque in contracheques:
         try:
             texto_contracheque = extrair_texto(url_contracheque)
@@ -28,6 +28,10 @@ for indice, linha in tqdm(dados.iterrows(), total=dados.shape[0]):
                 texto_contracheque, quantidade_pag) != "Inválido":
             break
         salario = extrair_salario_bruto(texto_contracheque)
+        if rotula_contracheque(texto_contracheque, quantidade_pag) == "Contracheque" and salario == 0:
+            decisao_contracheque = ""
+            verify += 1
+            break
         if rotula_contracheque(texto_contracheque, quantidade_pag) == "Inválido":
             decisao_contracheque = "alínea \"b\";"
             break
@@ -36,7 +40,8 @@ for indice, linha in tqdm(dados.iterrows(), total=dados.shape[0]):
             break
     if verifica_meses_iguais(datas):
         decisao_contracheque = "alínea \"b\";"
-    if rotula_contracheque(texto_contracheque, quantidade_pag) == "Contracheque" and decisao_contracheque == "":
+    if rotula_contracheque(texto_contracheque,
+                           quantidade_pag) == "Contracheque" and decisao_contracheque == "" and verify == 0:
         decisao_contracheque = "DEFERIDO"
 
     dados.loc[indice, 'Análise Programa (Contracheque)'] = decisao_contracheque
