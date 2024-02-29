@@ -7,57 +7,64 @@ from PIL import Image
 from io import BytesIO
 import os
 import tempfile
+import cv2
+import numpy as np
+
+
+def preprocess_image(img):
+    # Aplique técnicas de pré-processamento, como binarização e remoção de ruído
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, img = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY)
+    img = cv2.fastNlMeansDenoising(img, None, 10, 7, 21)
+    return img
+
+
+def extract_text_from_image(img):
+    # Use Tesseract para extrair texto da imagem
+    return pytesseract.image_to_string(img, lang='por')
 
 
 def extrair_texto(url):
     text = ""
-    # Verificar a extensão do arquivo na URL
+
     if url.endswith(".pdf"):
-        # Baixar o conteúdo do PDF
         response = requests.get(url)
         pdf_content = BytesIO(response.content)
-        # Salvar o conteúdo do PDF em um arquivo temporário
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             temp_file.write(pdf_content.getvalue())
             temp_filename = temp_file.name
-        # Criar um objeto de documento PDF
+
         try:
             doc = fitz.open(temp_filename)
-        except TypeError as e:
-            print(f"Erro ao processar a imagem: {e}")
-            text = ""
-        # Iterar pelas páginas do documento
-        for page_number in range(doc.page_count):
-            # Obter uma página específica
-            page = doc[page_number]
-            # Extrai o texto diretamente
-            page_text = page.get_text("text")
-            if not page_text.strip():
-                # Converter a página para uma imagem
-                image = page.get_pixmap()
-                # Salvar a imagem temporariamente
-                image_path = f"temp_image_page_{page_number + 1}.png"
-                image.save(image_path)
-                # Realizar OCR na imagem
-                page_text = pytesseract.image_to_string(Image.open(image_path), lang='por')
-                # Remover a imagem temporária
-                os.remove(image_path)
-            # Acumular o texto da página atual
-            text += page_text + " "
-        # Fechar o documento
-        doc.close()
-        # Remover o arquivo temporário do PDF
-        os.remove(temp_filename)
+            for page_number in range(doc.page_count):
+                page = doc[page_number]
+                page_text = page.get_text("text")
+                numero_linhas = page_text.count('\n')
+
+                if not page_text.strip() or numero_linhas < 5:
+                    image = page.get_pixmap()
+                    image_path = f"temp_image_page_{page_number + 1}.png"
+                    image.save(image_path)
+                    img = cv2.imread(image_path)
+                    img = preprocess_image(img)
+                    page_text = extract_text_from_image(img)
+                    os.remove(image_path)
+
+                text += page_text + " "
+
+            doc.close()
+        except Exception as e:
+            print(f"Erro ao processar o PDF: {e}")
+        finally:
+            os.remove(temp_filename)
+
     elif url.endswith((".jpg", ".jpeg")):
-        # Baixar o conteúdo da imagem JPEG
         response = requests.get(url)
         image = Image.open(BytesIO(response.content))
-        # Realizar OCR na imagem
-        try:
-            text = pytesseract.image_to_string(image, lang='por')
-        except TypeError as e:
-            print(f"Erro ao processar a imagem: {e}")
-            text = ""
+        img = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        img = preprocess_image(img)
+        text = extract_text_from_image(img)
 
     text = text.replace("\n", " ")
     text = text.replace("R$", "")
@@ -84,11 +91,11 @@ def extrai_numero_de_paginas(url):
 def rotula_contracheque(text, numero_paginas):
     if "instituto nacional do seguro social" in text or "cadastro nacional de informações sociais" in text:
         return "Contracheque"
-    elif "imposto sobre a renda" in text or "imposto de renda" in text:
+    elif any(keyword in text for keyword in ["imposto sobre a renda", "imposto de renda"]):
         return "Inválido"
     elif "anexo" in text or "declaração" in text:
         return "Declaração"
-    elif "extrato financeiro de estágio" in text or "proventos" in text or "descontos" in text:
+    elif "extrato financeiro de estágio" in text or "proventos" in text or "descontos" in text or "valor bruto" in text or "salário base" in text:
         return "Contracheque"
     elif any(keyword in text for keyword in ["carteira de trabalho digital", "nota fiscal",
                                              "informações cadastrais da familia",
@@ -97,14 +104,13 @@ def rotula_contracheque(text, numero_paginas):
                                              "termo de recisão de contrato de trabalho", "entrada conta corrente",
                                              "imposto de renda", "mobile banking", "meu nis",
                                              "termo de recisão do contrato de trabalho",
-                                             "termo de homologação de recisão de contato de trabalho"]):
+                                             "termo de homologação de recisão de contato de trabalho", "comprovante pix", "pix recebimento"]):
         return "Inválido"
-    elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf" in text or "extrato" in text
-          or "cadastro único" in text or "cadastro unico" in text)\
-            and numero_paginas == 1:
+    elif ("comprovante de cadastro" in text or "comprovante de situação cadastral no cpf" in text or "cadastro único" in text or "cadastro unico" in text or "extrato" in text)\
+            and (numero_paginas == 1 or numero_paginas is None):
         return "Inválido"
-    elif any(keyword in text for keyword in ["proventos", "folha mensal", "vencimentos", "descontos",
-                                             "líquido", "bolsa auxilio", "recibo de pagamento de salário"]):
+    elif any(keyword in text for keyword in ["provento", "folha mensal", "vencimentos", "descontos",
+                                             "líquido", "bolsa auxilio", "recibo de pagamento de salário", "demonstrativo pagamento"]):
         return "Contracheque"
     elif "carteira de trabalho" in text:
         return "Carteira de Trabalho"
@@ -144,7 +150,7 @@ def rotula_imposto_de_renda(text, numero_paginas):
 def extrair_salario_bruto(texto):
     salario_bruto = 0
     # Encontrar todas as ocorrências de números no texto
-    numeros = re.findall(r'(?<= )\d+\.\d+\,\d+(?= )', texto)
+    numeros = re.findall(r'(?<= )\d+\.\d+,\d+(?= )', texto)
     if numeros:
         # Remover pontos, substituir vírgulas por pontos e converter para floats
         numeros_floats = [float(num.replace('.', '').replace(',', '.')) for num in numeros]
@@ -154,9 +160,10 @@ def extrair_salario_bruto(texto):
             salario_bruto = max(numeros_floats)
             if salario_bruto > 15000:
                 numeros_floats = sorted(numeros_floats, reverse=True)
-                salario_bruto = numeros_floats[1]
+                if len(numeros_floats) >= 2:
+                    salario_bruto = numeros_floats[1]
     else:
-        numeros_2 = re.findall(r'(?<= )\d+\,\d+\.\d+(?= )', texto)
+        numeros_2 = re.findall(r'(?<= )\d+,\d+\.\d+(?= )', texto)
         if numeros_2:
             # Remover pontos, substituir vírgulas por pontos e converter para floats
             numeros_floats = [float(num.replace(',', '')) for num in numeros_2]
@@ -166,19 +173,61 @@ def extrair_salario_bruto(texto):
                 salario_bruto = max(numeros_floats)
                 if salario_bruto > 15000:
                     numeros_floats = sorted(numeros_floats, reverse=True)
-                    salario_bruto = numeros_floats[1]
+                    if len(numeros_floats) >= 2:
+                        salario_bruto = numeros_floats[1]
         else:
-            numeros_3 = re.findall(r'(?<= )\d+\,\d+(?= )', texto)
+            numeros_3 = re.findall(r'(?<= )\d+,\d+,\d(?= )', texto)
+            print(f"encontrou: {numeros_3}")
             if numeros_3:
-                # Remover pontos, substituir vírgulas por pontos e converter para floats
-                numeros_floats = [float(num.replace(',', '.')) for num in numeros_3]
+
+                numeros_floats = [float(num.replace(',', '', 1).replace(',', '.')) for num in numeros_3]
 
                 # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
                 if numeros_floats:
                     salario_bruto = max(numeros_floats)
                     if salario_bruto > 15000:
                         numeros_floats = sorted(numeros_floats, reverse=True)
-                        salario_bruto = numeros_floats[1]
+                        if len(numeros_floats) >= 2:
+                            salario_bruto = numeros_floats[1]
+            else:
+                numeros_4 = re.findall(r'(?<= )\d+\.\d+(?= )', texto)
+                if numeros_4:
+                    # Remover pontos, substituir vírgulas por pontos e converter para floats
+                    numeros_floats = [float(num.replace(',', '.')) for num in numeros_4]
+
+                    # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
+                    if numeros_floats:
+                        salario_bruto = max(numeros_floats)
+                        if salario_bruto > 15000:
+                            numeros_floats = sorted(numeros_floats, reverse=True)
+                            if len(numeros_floats) >= 2:
+                                salario_bruto = numeros_floats[1]
+                else:
+                    numeros_5 = re.findall(r'\b\d+\.\d+,\d+\b', texto)
+                    if numeros_5:
+                        # Remover pontos, substituir vírgulas por pontos e converter para floats
+                        numeros_floats = [float(num.replace('.', '').replace(',', '.')) for num in numeros_5]
+
+                        # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
+                        if numeros_floats:
+                            salario_bruto = max(numeros_floats)
+                            if salario_bruto > 15000:
+                                numeros_floats = sorted(numeros_floats, reverse=True)
+                                if len(numeros_floats) >= 2:
+                                    salario_bruto = numeros_floats[1]
+                    else:
+                        numeros_6 = re.findall(r'(?<= )\d+,\d+(?= )', texto)
+                        if numeros_6:
+                            # Remover pontos, substituir vírgulas por pontos e converter para floats
+                            numeros_floats = [float(num.replace(',', '.')) for num in numeros_6]
+
+                            # Se houver números, retornar o maior (assumindo que o salário bruto é o maior valor)
+                            if numeros_floats:
+                                salario_bruto = max(numeros_floats)
+                                if salario_bruto > 15000:
+                                    numeros_floats = sorted(numeros_floats, reverse=True)
+                                    if len(numeros_floats) >= 2:
+                                        salario_bruto = numeros_floats[1]
     return salario_bruto
 
 
@@ -297,22 +346,29 @@ def testa_uni_contracheque(contracheques):
     texto_contracheque = ""
     datas = []
     verify = 0
+    count = 1
+    quantidade_pag = 0
     for url_contracheque in contracheques:
+        print(f"Contracheque {count}")
+        count += 1
         try:
             texto_contracheque = extrair_texto(url_contracheque)
             quantidade_pag = extrai_numero_de_paginas(url_contracheque)
             data = extrair_mes_ano(texto_contracheque)
+            print(data)
             datas.append(data)
-            print(rotula_contracheque(texto_contracheque, quantidade_pag))
         except Exception as erro:
             print(f"Não foi possível analizar o contracheque pelo seguinte erro: {erro}")
+            break
+        print(rotula_contracheque(texto_contracheque, quantidade_pag))
         if rotula_contracheque(texto_contracheque, quantidade_pag) != "Contracheque" and rotula_contracheque(
                 texto_contracheque, quantidade_pag) != "Inválido":
             break
         salario = extrair_salario_bruto(texto_contracheque)
-        print(salario)
-        if rotula_contracheque(texto_contracheque, quantidade_pag) == "Contracheque" and salario == 0:
+        print(f"salário = {salario}")
+        if rotula_contracheque(texto_contracheque, quantidade_pag) == "Contracheque" and salario == 0 and count != 4:
             decisao_contracheque = ""
+            print("Não foi possível extrair o salário")
             verify += 1
             break
         if rotula_contracheque(texto_contracheque, quantidade_pag) == "Inválido":
